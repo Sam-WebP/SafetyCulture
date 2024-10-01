@@ -12,8 +12,10 @@ var (
 	orgID1           = uuid.FromStringOrNil("c1556e17-b7c0-45a3-a6ae-9546248fb17a")
 	orgID2           = uuid.FromStringOrNil("f8a982ed-f17a-4dd9-99ca-ef05b6f5b17f")
 	nonExistentOrgID = uuid.FromStringOrNil("00000000-0000-0000-0000-000000000000")
+)
 
-	folders = []folder.Folder{
+func initGetFolderDriver() folder.IDriver {
+	sampleFolders := []folder.Folder{
 		{Name: "alpha", Paths: "alpha", OrgId: orgID1},
 		{Name: "bravo", Paths: "alpha.bravo", OrgId: orgID1},
 		{Name: "charlie", Paths: "alpha.bravo.charlie", OrgId: orgID1},
@@ -21,10 +23,11 @@ var (
 		{Name: "echo", Paths: "echo", OrgId: orgID1},
 		{Name: "foxtrot", Paths: "foxtrot", OrgId: orgID2},
 	}
-)
+	return folder.NewDriver(sampleFolders)
+}
 
 func TestGetFoldersByOrgID(t *testing.T) {
-	driver := folder.NewDriver(folders)
+	driver := initGetFolderDriver()
 
 	tests := []struct {
 		name  string
@@ -66,7 +69,7 @@ func TestGetFoldersByOrgID(t *testing.T) {
 }
 
 func TestGetAllChildFolders(t *testing.T) {
-	driver := folder.NewDriver(folders)
+	driver := initGetFolderDriver()
 
 	tests := []struct {
 		name    string
