@@ -1,6 +1,11 @@
 package folder
 
-import "github.com/gofrs/uuid"
+import (
+	"errors"
+	"strings"
+
+	"github.com/gofrs/uuid"
+)
 
 type IDriver interface {
 	// GetFoldersByOrgID returns all folders that belong to a specific orgID.
@@ -8,7 +13,7 @@ type IDriver interface {
 	// component 1
 	// Implement the following methods:
 	// GetAllChildFolders returns all child folders of a specific folder.
-	GetAllChildFolders(orgID uuid.UUID, name string) []Folder
+	GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, error)
 
 	// component 2
 	// Implement the following methods:
@@ -16,18 +21,33 @@ type IDriver interface {
 	MoveFolder(name string, dst string) ([]Folder, error)
 }
 
-type driver struct {
-	// define attributes here
-	// data structure to store folders
-	// or preprocessed data
+// Custom errors
+var (
+	ErrFolderNotFound          = errors.New("folder does not exist")
+	ErrFolderNotInOrganization = errors.New("folder does not exist in the specified organization")
+)
 
-	// example: feel free to change the data structure, if slice is not what you want
-	folders []Folder
+type driver struct {
+	folderMap      map[string]Folder
+	foldersByOrgID map[uuid.UUID][]Folder
 }
 
 func NewDriver(folders []Folder) IDriver {
-	return &driver{
-		// initialize attributes here
-		folders: folders,
+	d := &driver{
+		folderMap:      make(map[string]Folder),
+		foldersByOrgID: make(map[uuid.UUID][]Folder),
 	}
+
+	for _, folder := range folders {
+		key := generateKey(folder.Name, folder.OrgId)
+		d.folderMap[key] = folder
+
+		d.foldersByOrgID[folder.OrgId] = append(d.foldersByOrgID[folder.OrgId], folder)
+	}
+
+	return d
+}
+
+func generateKey(name string, orgID uuid.UUID) string {
+	return strings.ToLower(name) + "_" + orgID.String()
 }

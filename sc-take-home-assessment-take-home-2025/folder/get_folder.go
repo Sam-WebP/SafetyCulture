@@ -1,27 +1,52 @@
 package folder
 
-import "github.com/gofrs/uuid"
+import (
+	"strings"
+
+	"github.com/gofrs/uuid"
+)
 
 func GetAllFolders() []Folder {
 	return GetSampleData()
 }
 
-func (f *driver) GetFoldersByOrgID(orgID uuid.UUID) []Folder {
-	folders := f.folders
+func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []Folder {
+	if folders, exists := d.foldersByOrgID[orgID]; exists {
+		return folders
+	}
+	return nil
+}
 
-	res := []Folder{}
-	for _, f := range folders {
-		if f.OrgId == orgID {
-			res = append(res, f)
+func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, error) {
+	// Find the parent folder
+	parentFolder, err := d.getFolderByNameAndOrgID(name, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find and store the child folders
+	prefix := parentFolder.Paths + "."
+	childFolders := []Folder{}
+	for _, folder := range d.foldersByOrgID[orgID] {
+		if strings.HasPrefix(folder.Paths, prefix) {
+			childFolders = append(childFolders, folder)
 		}
 	}
 
-	return res
-
+	return childFolders, nil
 }
 
-func (f *driver) GetAllChildFolders(orgID uuid.UUID, name string) []Folder {
-	// Your code here...
+func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, error) {
+	key := generateKey(name, orgID)
+	if folder, exists := d.folderMap[key]; exists {
+		return &folder, nil
+	}
 
-	return []Folder{}
+	// Check if the folder exists in any organization.
+	for _, folder := range d.folderMap {
+		if strings.EqualFold(folder.Name, name) && folder.OrgId != orgID {
+			return nil, ErrFolderNotInOrganization
+		}
+	}
+	return nil, ErrFolderNotFound
 }
