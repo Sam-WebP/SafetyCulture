@@ -23,8 +23,11 @@ type IDriver interface {
 
 // Custom errors
 var (
-	ErrFolderNotFound          = errors.New("folder does not exist")
-	ErrFolderNotInOrganization = errors.New("folder does not exist in the specified organization")
+	ErrFolderNotFound                  = errors.New("folder does not exist")
+	ErrFolderNotInOrganization         = errors.New("folder does not exist in the specified organization")
+	ErrCannotMoveAcrossOrganizations   = errors.New("cannot move a folder to a different organization")
+	ErrCannotMoveFolderToItself        = errors.New("cannot move a folder to itself")
+	ErrCannotMoveFolderToOwnDescendant = errors.New("cannot move a folder to a child of itself")
 )
 
 type driver struct {
