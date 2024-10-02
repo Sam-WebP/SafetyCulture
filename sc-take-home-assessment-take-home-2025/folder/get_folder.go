@@ -12,9 +12,14 @@ func GetAllFolders() []Folder {
 
 func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []Folder {
 	if folders, exists := d.foldersByOrgID[orgID]; exists {
-		return folders
+		// Convert []*Folder to []Folder
+		result := make([]Folder, len(folders))
+		for i, folderPtr := range folders {
+			result[i] = *folderPtr
+		}
+		return result
 	}
-	return nil
+	return []Folder{}
 }
 
 func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, error) {
@@ -24,12 +29,12 @@ func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, err
 		return nil, err
 	}
 
-	// Find and store the child folders
+	// Build the prefix for child paths
 	prefix := parentFolder.Paths + "."
 	childFolders := []Folder{}
 	for _, folder := range d.foldersByOrgID[orgID] {
 		if strings.HasPrefix(folder.Paths, prefix) {
-			childFolders = append(childFolders, folder)
+			childFolders = append(childFolders, *folder)
 		}
 	}
 
@@ -37,16 +42,23 @@ func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, err
 }
 
 func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, error) {
-	key := generateKey(name, orgID)
-	if folder, exists := d.folderMap[key]; exists {
-		return &folder, nil
-	}
-
-	// Check if the folder exists in any organization.
-	for _, folder := range d.folderMap {
-		if strings.EqualFold(folder.Name, name) && folder.OrgId != orgID {
-			return nil, ErrFolderNotInOrganization
+	lowerName := strings.ToLower(name)
+	if folders, exists := d.nameIndex[lowerName]; exists {
+		for _, folder := range folders {
+			if folder.OrgId == orgID {
+				return folder, nil
+			}
 		}
 	}
+
+	// If not found in the specified orgID, check if the folder exists in other organizations
+	if folders, exists := d.nameIndex[lowerName]; exists {
+		for _, folder := range folders {
+			if folder.OrgId != orgID {
+				return nil, ErrFolderNotInOrganization
+			}
+		}
+	}
+
 	return nil, ErrFolderNotFound
 }
