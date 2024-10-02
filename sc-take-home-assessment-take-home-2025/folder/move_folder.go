@@ -41,7 +41,7 @@ func (d *driver) MoveFolder(name string, dst string) ([]Folder, error) {
 	orgID := sourceOrgID
 
 	// Update the paths of source folder and its descendants
-	for i, folder := range d.foldersByOrgID[orgID] {
+	for _, folder := range d.foldersByOrgID[orgID] {
 		if folder.Paths == oldPath || strings.HasPrefix(folder.Paths, oldPath+".") {
 			// Compute the new path
 			relativePath := strings.TrimPrefix(folder.Paths, oldPath)
@@ -51,28 +51,21 @@ func (d *driver) MoveFolder(name string, dst string) ([]Folder, error) {
 				folder.Paths += "." + relativePath
 			}
 
-			// Update folder in foldersByOrgID
-			d.foldersByOrgID[orgID][i] = folder
-
 			// Update folderMap
-			oldKey := generateKey(folder.Name, orgID)
-			delete(d.folderMap, oldKey)
-
-			newKey := generateKey(folder.Name, orgID)
-			d.folderMap[newKey] = folder
+			key := generateKey(folder.Name, orgID)
+			d.folderMap[key] = folder
+			// No need to update nameIndex as folder's name hasn't changed
 		}
 	}
 
-	return d.foldersByOrgID[orgID], nil
+	return d.GetFoldersByOrgID(orgID), nil
 }
 
 func (d *driver) findFolderByName(name string) (Folder, uuid.UUID, error) {
-	for orgID, folders := range d.foldersByOrgID {
-		for _, folder := range folders {
-			if folder.Name == name {
-				return folder, orgID, nil
-			}
-		}
+	lowerName := strings.ToLower(name)
+	if folders, exists := d.nameIndex[lowerName]; exists && len(folders) > 0 {
+		// Assuming one folder per name per organization
+		return *folders[0], folders[0].OrgId, nil // Return first occurrence
 	}
 	return Folder{}, uuid.Nil, ErrFolderNotFound
 }
