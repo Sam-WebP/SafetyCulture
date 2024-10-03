@@ -35,9 +35,14 @@ func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]*Folder, er
 }
 
 func (d *driver) traverseChildren(folder *Folder, collection *[]*Folder) {
-	for _, child := range folder.Children {
-		*collection = append(*collection, child)
-		d.traverseChildren(child, collection)
+	stack := []*Folder{folder}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, child := range current.Children {
+			*collection = append(*collection, child)
+			stack = append(stack, child)
+		}
 	}
 }
 
@@ -46,10 +51,8 @@ func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder,
 	if orgMap, exists := d.nameIndex[lowerName]; exists {
 		if folder, exists := orgMap[orgID]; exists {
 			return folder, nil
-		} else {
-			// Folder exists with this name but not in the specified orgID
-			return nil, ErrFolderNotInOrganization
 		}
+		return nil, ErrFolderNotInOrganization
 	}
 	return nil, ErrFolderNotFound
 }
