@@ -6,47 +6,53 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-func GetAllFolders() []Folder {
-	return GetSampleData()
+func GetAllFolders() []*Folder {
+	data := GetSampleData()
+	result := make([]*Folder, len(data))
+	for i := range data {
+		result[i] = &data[i]
+	}
+	return result
 }
 
-func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []Folder {
+func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []*Folder {
 	if folders, exists := d.foldersByOrgID[orgID]; exists {
 		return folders
 	}
-	return nil
+	return []*Folder{}
 }
 
-func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, error) {
-	// Find the parent folder
+func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]*Folder, error) {
 	parentFolder, err := d.getFolderByNameAndOrgID(name, orgID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find and store the child folders
-	prefix := parentFolder.Paths + "."
-	childFolders := []Folder{}
-	for _, folder := range d.foldersByOrgID[orgID] {
-		if strings.HasPrefix(folder.Paths, prefix) {
-			childFolders = append(childFolders, folder)
-		}
-	}
+	childFolders := []*Folder{}
+	d.traverseChildren(parentFolder, &childFolders)
 
 	return childFolders, nil
 }
 
-func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, error) {
-	key := generateKey(name, orgID)
-	if folder, exists := d.folderMap[key]; exists {
-		return &folder, nil
-	}
-
-	// Check if the folder exists in any organization.
-	for _, folder := range d.folderMap {
-		if strings.EqualFold(folder.Name, name) && folder.OrgId != orgID {
-			return nil, ErrFolderNotInOrganization
+func (d *driver) traverseChildren(folder *Folder, collection *[]*Folder) {
+	stack := []*Folder{folder}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, child := range current.Children {
+			*collection = append(*collection, child)
+			stack = append(stack, child)
 		}
+	}
+}
+
+func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, error) {
+	lowerName := strings.ToLower(name)
+	if orgMap, exists := d.nameIndex[lowerName]; exists {
+		if folder, exists := orgMap[orgID]; exists {
+			return folder, nil
+		}
+		return nil, ErrFolderNotInOrganization
 	}
 	return nil, ErrFolderNotFound
 }

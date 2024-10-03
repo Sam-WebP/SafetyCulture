@@ -1,78 +1,84 @@
 package folder
 
 import (
-	"strings"
+	"fmt"
 
 	"github.com/gofrs/uuid"
 )
 
-func (d *driver) MoveFolder(name string, dst string) ([]Folder, error) {
-	// Find source folder
-	sourceFolder, sourceOrgID, err := d.findFolderByName(name)
+func (d *driver) MoveFolder(orgID uuid.UUID, name string, dst string) ([]*Folder, error) {
+	sourceFolder, err := d.getFolderByNameAndOrgID(name, orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("source folder error: %w", err)
 	}
 
-	// Find destination folder
-	destinationFolder, destinationOrgID, err := d.findFolderByName(dst)
+	destinationFolder, err := d.getFolderByNameAndOrgID(dst, orgID)
 	if err != nil {
-		return nil, err
+		if err == ErrFolderNotInOrganization {
+			return nil, fmt.Errorf("destination folder error: %w", ErrCannotMoveAcrossOrganizations)
+		}
+		return nil, fmt.Errorf("destination folder error: %w", err)
 	}
 
-	// Ensure both folders are in the same organization
-	if sourceOrgID != destinationOrgID {
-		return nil, ErrCannotMoveAcrossOrganizations
-	}
-
-	// Prevent moving a folder to itself
-	if sourceFolder.Paths == destinationFolder.Paths && sourceFolder.Name == destinationFolder.Name {
+	if sourceFolder == destinationFolder {
 		return nil, ErrCannotMoveFolderToItself
 	}
 
-	// Prevent moving a folder to its own descendant
-	if strings.HasPrefix(destinationFolder.Paths, sourceFolder.Paths+".") {
+	if isDescendant(sourceFolder, destinationFolder) {
 		return nil, ErrCannotMoveFolderToOwnDescendant
 	}
 
-	// Prepare new path for the source folder
-	oldPath := sourceFolder.Paths
-	newPath := destinationFolder.Paths + "." + sourceFolder.Name
-
-	orgID := sourceOrgID
-
-	// Update the paths of source folder and its descendants
-	for i, folder := range d.foldersByOrgID[orgID] {
-		if folder.Paths == oldPath || strings.HasPrefix(folder.Paths, oldPath+".") {
-			// Compute the new path
-			relativePath := strings.TrimPrefix(folder.Paths, oldPath)
-			relativePath = strings.TrimPrefix(relativePath, ".")
-			folder.Paths = newPath
-			if relativePath != "" {
-				folder.Paths += "." + relativePath
-			}
-
-			// Update folder in foldersByOrgID
-			d.foldersByOrgID[orgID][i] = folder
-
-			// Update folderMap
-			oldKey := generateKey(folder.Name, orgID)
-			delete(d.folderMap, oldKey)
-
-			newKey := generateKey(folder.Name, orgID)
-			d.folderMap[newKey] = folder
-		}
+	// Update parent and children relationships
+	if sourceFolder.Parent != nil {
+		sourceFolder.Parent.Children = removeChild(sourceFolder.Parent.Children, sourceFolder)
 	}
+	sourceFolder.Parent = destinationFolder
+	destinationFolder.Children = append(destinationFolder.Children, sourceFolder)
 
-	return d.foldersByOrgID[orgID], nil
+	// Update paths iteratively
+	newPath := destinationFolder.Paths + "." + sourceFolder.Name
+	updatePathsIterative(sourceFolder, newPath)
+
+	return d.GetFoldersByOrgID(orgID), nil
 }
 
-func (d *driver) findFolderByName(name string) (Folder, uuid.UUID, error) {
-	for orgID, folders := range d.foldersByOrgID {
-		for _, folder := range folders {
-			if folder.Name == name {
-				return folder, orgID, nil
-			}
+func removeChild(children []*Folder, childToRemove *Folder) []*Folder {
+	for i, child := range children {
+		if child == childToRemove {
+			return append(children[:i], children[i+1:]...)
 		}
 	}
-	return Folder{}, uuid.Nil, ErrFolderNotFound
+	return children
+}
+
+func updatePathsIterative(folder *Folder, basePath string) {
+	// Avoid redundant updates by checking if the path actually changes
+	oldPath := folder.Paths
+	if oldPath == basePath {
+		return
+	}
+
+	stack := []*Folder{folder}
+	folder.Paths = basePath
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		for _, child := range current.Children {
+			child.Paths = current.Paths + "." + child.Name
+			stack = append(stack, child)
+		}
+	}
+}
+
+func isDescendant(folder *Folder, potentialDescendant *Folder) bool {
+	current := potentialDescendant.Parent
+	for current != nil {
+		if current == folder {
+			return true
+		}
+		current = current.Parent
+	}
+	return false
 }
