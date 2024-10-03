@@ -8,26 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Helper type to compare folder content
-type folderComparable struct {
-	Name  string
-	OrgId uuid.UUID
-	Paths string
-}
-
-// Helper function to convert []*folder.Folder to []folderComparable
-func foldersToComparable(folders []*folder.Folder) []folderComparable {
-	result := make([]folderComparable, len(folders))
-	for i, f := range folders {
-		result[i] = folderComparable{
-			Name:  f.Name,
-			OrgId: f.OrgId,
-			Paths: f.Paths,
-		}
-	}
-	return result
-}
-
 func initGetFolderDriver() folder.IDriver {
 	sampleFolders := []folder.Folder{
 		{Name: "alpha", Paths: "alpha", OrgId: orgID1},
