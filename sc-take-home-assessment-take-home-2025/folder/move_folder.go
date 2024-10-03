@@ -1,8 +1,7 @@
 package folder
 
 import (
-	"errors"
-	"strings"
+	"fmt"
 
 	"github.com/gofrs/uuid"
 )
@@ -10,23 +9,21 @@ import (
 func (d *driver) MoveFolder(orgID uuid.UUID, name string, dst string) ([]*Folder, error) {
 	sourceFolder, err := d.getFolderByNameAndOrgID(name, orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("source folder error: %w", err)
 	}
 
 	destinationFolder, err := d.getFolderByNameAndOrgID(dst, orgID)
 	if err != nil {
-		if errors.Is(err, ErrFolderNotInOrganization) {
-			// Destination folder exists but in a different organization
-			return nil, ErrCannotMoveAcrossOrganizations
+		if err == ErrFolderNotInOrganization {
+			return nil, fmt.Errorf("destination folder error: %w", ErrCannotMoveAcrossOrganizations)
 		}
-		return nil, err
+		return nil, fmt.Errorf("destination folder error: %w", err)
 	}
 
 	if sourceFolder == destinationFolder {
 		return nil, ErrCannotMoveFolderToItself
 	}
 
-	// Check if destination is a child of source
 	if isDescendant(sourceFolder, destinationFolder) {
 		return nil, ErrCannotMoveFolderToOwnDescendant
 	}
@@ -38,9 +35,9 @@ func (d *driver) MoveFolder(orgID uuid.UUID, name string, dst string) ([]*Folder
 	sourceFolder.Parent = destinationFolder
 	destinationFolder.Children = append(destinationFolder.Children, sourceFolder)
 
-	// Update paths recursively
+	// Update paths iteratively
 	newPath := destinationFolder.Paths + "." + sourceFolder.Name
-	updatePathsRecursive(d, sourceFolder, newPath)
+	updatePathsIterative(sourceFolder, newPath)
 
 	return d.GetFoldersByOrgID(orgID), nil
 }
@@ -54,39 +51,33 @@ func removeChild(children []*Folder, childToRemove *Folder) []*Folder {
 	return children
 }
 
-func updatePathsRecursive(d *driver, folder *Folder, newPath string) {
-	folder.Paths = newPath
-	for _, child := range folder.Children {
-		childNewPath := newPath + "." + child.Name
-		updatePathsRecursive(d, child, childNewPath)
-	}
-}
+func updatePathsIterative(folder *Folder, newPath string) {
+	stack := []struct {
+		f      *Folder
+		newPth string
+	}{{folder, newPath}}
 
-func (d *driver) findFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, uuid.UUID, error) {
-	lowerName := strings.ToLower(name)
-	if orgMap, exists := d.nameIndex[lowerName]; exists {
-		if orgID == uuid.Nil {
-			// Return any folder with this name
-			for oid, folder := range orgMap {
-				return folder, oid, nil
-			}
-			return nil, uuid.Nil, ErrFolderNotFound
-		} else if folder, exists := orgMap[orgID]; exists {
-			return folder, orgID, nil
-		} else {
-			// Folder exists with this name but not in the specified orgID
-			return nil, uuid.Nil, ErrFolderNotInOrganization
+	for len(stack) > 0 {
+		curr := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		curr.f.Paths = curr.newPth
+		for _, child := range curr.f.Children {
+			childNewPath := curr.newPth + "." + child.Name
+			stack = append(stack, struct {
+				f      *Folder
+				newPth string
+			}{child, childNewPath})
 		}
 	}
-	return nil, uuid.Nil, ErrFolderNotFound
 }
 
 func isDescendant(folder *Folder, potentialDescendant *Folder) bool {
-	if potentialDescendant == nil {
-		return false
+	current := potentialDescendant.Parent
+	for current != nil {
+		if current == folder {
+			return true
+		}
+		current = current.Parent
 	}
-	if potentialDescendant.Parent == folder {
-		return true
-	}
-	return isDescendant(folder, potentialDescendant.Parent)
+	return false
 }
