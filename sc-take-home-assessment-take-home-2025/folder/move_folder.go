@@ -71,6 +71,7 @@ func updatePathsIterative(folder *Folder, basePath string) {
 		}
 	}
 }
+
 func isDescendant(folder *Folder, potentialDescendant *Folder) bool {
 	current := potentialDescendant.Parent
 	for current != nil {
