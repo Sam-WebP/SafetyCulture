@@ -30,9 +30,11 @@ const MaxDepth = 5
 const DefaultOrgID = "c1556e17-b7c0-45a3-a6ae-9546248fb17a"
 
 type Folder struct {
-	Name  string    `json:"name"`
-	OrgId uuid.UUID `json:"org_id"`
-	Paths string    `json:"paths"`
+	Name     string    `json:"name"`
+	OrgId    uuid.UUID `json:"org_id"`
+	Paths    string    `json:"paths"`
+	Parent   *Folder   `json:"-"`
+	Children []*Folder `json:"-"`
 }
 
 func GenerateData() []Folder {
