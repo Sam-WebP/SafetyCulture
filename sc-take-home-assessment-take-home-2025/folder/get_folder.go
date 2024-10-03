@@ -6,59 +6,50 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-func GetAllFolders() []Folder {
-	return GetSampleData()
-}
-
-func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []Folder {
-	if folders, exists := d.foldersByOrgID[orgID]; exists {
-		// Convert []*Folder to []Folder
-		result := make([]Folder, len(folders))
-		for i, folderPtr := range folders {
-			result[i] = *folderPtr
-		}
-		return result
+func GetAllFolders() []*Folder {
+	data := GetSampleData()
+	result := make([]*Folder, len(data))
+	for i := range data {
+		result[i] = &data[i]
 	}
-	return []Folder{}
+	return result
 }
 
-func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]Folder, error) {
-	// Find the parent folder
+func (d *driver) GetFoldersByOrgID(orgID uuid.UUID) []*Folder {
+	if folders, exists := d.foldersByOrgID[orgID]; exists {
+		return folders
+	}
+	return []*Folder{}
+}
+
+func (d *driver) GetAllChildFolders(orgID uuid.UUID, name string) ([]*Folder, error) {
 	parentFolder, err := d.getFolderByNameAndOrgID(name, orgID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build the prefix for child paths
-	prefix := parentFolder.Paths + "."
-	childFolders := []Folder{}
-	for _, folder := range d.foldersByOrgID[orgID] {
-		if strings.HasPrefix(folder.Paths, prefix) {
-			childFolders = append(childFolders, *folder)
-		}
-	}
+	childFolders := []*Folder{}
+	d.traverseChildren(parentFolder, &childFolders)
 
 	return childFolders, nil
 }
 
+func (d *driver) traverseChildren(folder *Folder, collection *[]*Folder) {
+	for _, child := range folder.Children {
+		*collection = append(*collection, child)
+		d.traverseChildren(child, collection)
+	}
+}
+
 func (d *driver) getFolderByNameAndOrgID(name string, orgID uuid.UUID) (*Folder, error) {
 	lowerName := strings.ToLower(name)
-	if folders, exists := d.nameIndex[lowerName]; exists {
-		for _, folder := range folders {
-			if folder.OrgId == orgID {
-				return folder, nil
-			}
+	if orgMap, exists := d.nameIndex[lowerName]; exists {
+		if folder, exists := orgMap[orgID]; exists {
+			return folder, nil
+		} else {
+			// Folder exists with this name but not in the specified orgID
+			return nil, ErrFolderNotInOrganization
 		}
 	}
-
-	// If not found in the specified orgID, check if the folder exists in other organizations
-	if folders, exists := d.nameIndex[lowerName]; exists {
-		for _, folder := range folders {
-			if folder.OrgId != orgID {
-				return nil, ErrFolderNotInOrganization
-			}
-		}
-	}
-
 	return nil, ErrFolderNotFound
 }
