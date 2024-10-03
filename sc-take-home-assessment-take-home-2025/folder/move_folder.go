@@ -51,26 +51,26 @@ func removeChild(children []*Folder, childToRemove *Folder) []*Folder {
 	return children
 }
 
-func updatePathsIterative(folder *Folder, newPath string) {
-	stack := []struct {
-		f      *Folder
-		newPth string
-	}{{folder, newPath}}
+func updatePathsIterative(folder *Folder, basePath string) {
+	// Avoid redundant updates by checking if the path actually changes
+	oldPath := folder.Paths
+	if oldPath == basePath {
+		return
+	}
+
+	stack := []*Folder{folder}
+	folder.Paths = basePath
 
 	for len(stack) > 0 {
-		curr := stack[len(stack)-1]
+		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		curr.f.Paths = curr.newPth
-		for _, child := range curr.f.Children {
-			childNewPath := curr.newPth + "." + child.Name
-			stack = append(stack, struct {
-				f      *Folder
-				newPth string
-			}{child, childNewPath})
+
+		for _, child := range current.Children {
+			child.Paths = current.Paths + "." + child.Name
+			stack = append(stack, child)
 		}
 	}
 }
-
 func isDescendant(folder *Folder, potentialDescendant *Folder) bool {
 	current := potentialDescendant.Parent
 	for current != nil {
