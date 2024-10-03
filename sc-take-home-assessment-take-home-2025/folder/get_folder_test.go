@@ -8,8 +8,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func initGetFolderDriver() folder.IDriver {
+// Helper type to compare folder content
+type folderComparable struct {
+	Name  string
+	OrgId uuid.UUID
+	Paths string
+}
 
+// Helper function to convert []*folder.Folder to []folderComparable
+func foldersToComparable(folders []*folder.Folder) []folderComparable {
+	result := make([]folderComparable, len(folders))
+	for i, f := range folders {
+		result[i] = folderComparable{
+			Name:  f.Name,
+			OrgId: f.OrgId,
+			Paths: f.Paths,
+		}
+	}
+	return result
+}
+
+func initGetFolderDriver() folder.IDriver {
 	sampleFolders := []folder.Folder{
 		{Name: "alpha", Paths: "alpha", OrgId: orgID1},
 		{Name: "bravo", Paths: "alpha.bravo", OrgId: orgID1},
@@ -27,12 +46,12 @@ func TestGetFoldersByOrgID(t *testing.T) {
 	tests := []struct {
 		name  string
 		orgID uuid.UUID
-		want  []folder.Folder
+		want  []*folder.Folder
 	}{
 		{
 			name:  "Existing orgID with folders",
 			orgID: orgID1,
-			want: []folder.Folder{
+			want: []*folder.Folder{
 				{Name: "alpha", Paths: "alpha", OrgId: orgID1},
 				{Name: "bravo", Paths: "alpha.bravo", OrgId: orgID1},
 				{Name: "charlie", Paths: "alpha.bravo.charlie", OrgId: orgID1},
@@ -43,14 +62,14 @@ func TestGetFoldersByOrgID(t *testing.T) {
 		{
 			name:  "Another existing orgID with folders",
 			orgID: orgID2,
-			want: []folder.Folder{
+			want: []*folder.Folder{
 				{Name: "foxtrot", Paths: "foxtrot", OrgId: orgID2},
 			},
 		},
 		{
 			name:  "Non-existent orgID",
 			orgID: nonExistentOrgID,
-			want:  []folder.Folder{},
+			want:  []*folder.Folder{},
 		},
 	}
 
@@ -58,7 +77,7 @@ func TestGetFoldersByOrgID(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got := driver.GetFoldersByOrgID(tt.orgID)
-			assert.ElementsMatch(t, tt.want, got)
+			assert.ElementsMatch(t, foldersToComparable(tt.want), foldersToComparable(got), "Folders do not match")
 		})
 	}
 }
@@ -70,23 +89,23 @@ func TestGetAllChildFolders_Success(t *testing.T) {
 		name   string
 		orgID  uuid.UUID
 		folder string
-		want   []folder.Folder
+		want   []*folder.Folder
 	}{
 		{
 			name:   "Root folder with children",
 			orgID:  orgID1,
 			folder: "alpha",
-			want: []folder.Folder{
+			want: []*folder.Folder{
 				{Name: "bravo", Paths: "alpha.bravo", OrgId: orgID1},
-				{Name: "charlie", Paths: "alpha.bravo.charlie", OrgId: orgID1},
 				{Name: "delta", Paths: "alpha.delta", OrgId: orgID1},
+				{Name: "charlie", Paths: "alpha.bravo.charlie", OrgId: orgID1},
 			},
 		},
 		{
 			name:   "Parent folder that is also a child",
 			orgID:  orgID1,
 			folder: "bravo",
-			want: []folder.Folder{
+			want: []*folder.Folder{
 				{Name: "charlie", Paths: "alpha.bravo.charlie", OrgId: orgID1},
 			},
 		},
@@ -94,19 +113,19 @@ func TestGetAllChildFolders_Success(t *testing.T) {
 			name:   "Child folder with no children",
 			orgID:  orgID1,
 			folder: "charlie",
-			want:   []folder.Folder{},
+			want:   []*folder.Folder{},
 		},
 		{
 			name:   "Root folder with no children",
 			orgID:  orgID1,
 			folder: "echo",
-			want:   []folder.Folder{},
+			want:   []*folder.Folder{},
 		},
 		{
 			name:   "Root folder in second organization",
 			orgID:  orgID2,
 			folder: "foxtrot",
-			want:   []folder.Folder{},
+			want:   []*folder.Folder{},
 		},
 	}
 
@@ -115,7 +134,7 @@ func TestGetAllChildFolders_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := driver.GetAllChildFolders(tt.orgID, tt.folder)
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.want, got)
+			assert.ElementsMatch(t, foldersToComparable(tt.want), foldersToComparable(got), "Folders do not match")
 		})
 	}
 }
