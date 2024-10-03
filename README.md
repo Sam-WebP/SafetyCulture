@@ -28,6 +28,7 @@ To start using this project, follow these steps:
 
 **Print Sample Data:** View the contents of the `sample.json` file, which provides sample data structures used in the program.
 
+![image](https://github.com/user-attachments/assets/c0b55c9e-94b5-4f9f-a125-36ef3c3c8bac)
 ---
 
 Thank you for checking out my submission for the `sc-take-home-assessment-take-home-2025` project!
